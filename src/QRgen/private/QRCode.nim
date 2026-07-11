@@ -62,7 +62,7 @@ proc getSmallestVersion*(
 ): QRVersion =
   result = 1
   for version in getCapacities(mode)[ecLevel]:
-    if cast[uint16](data.len) < version:
+    if cast[uint16](data.len) <= version:
       return result
     result.inc
   raise newException(
