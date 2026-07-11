@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run the QRgen Nimony (Nim 3) test suite.
+#
+# Nimony has no Testament; each tests/nim3/test_*.nim is a standalone program
+# that imports testkit and exits non-zero on failure. This runner compiles and
+# runs each and aggregates the result.
+#
+#   tests/nim3/run                # all tests
+#   tests/nim3/run test_numeric   # a single test by name
+set -u
+
+cd "$(dirname "$0")/../.." || exit 2
+NIMONY="${NIMONY:-../nimony/bin/nimony}"
+[ -x "$NIMONY" ] || { echo "nimony not found at $NIMONY (set NIMONY=...)"; exit 2; }
+
+pattern="tests/nim3/test_*.nim"
+[ $# -gt 0 ] && pattern="tests/nim3/$1.nim"
+
+fail=0
+for t in $pattern; do
+  [ -f "$t" ] || continue
+  echo "=== $(basename "$t") ==="
+  if ! "$NIMONY" c -r --path:src --path:tests/nim3 "$t"; then
+    echo "FAILED: $(basename "$t")"
+    fail=1
+  fi
+  echo ""
+done
+
+[ $fail -eq 0 ] && echo "ALL NIM3 TESTS PASSED" || { echo "SOME NIM3 TESTS FAILED"; exit 1; }
