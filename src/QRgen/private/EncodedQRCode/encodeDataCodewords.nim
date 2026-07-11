@@ -13,12 +13,12 @@ template getVal16(c: char): uint16 =
 template encodeNumericModeData(self: var EncodedQRCode, data: string) =
   ## Encodes `data` via the numeric mode encoding algorithm.
   for i in step(0, data.len, 3):
+    # ISO/IEC 18004 §7.4.3: every full 3-digit group is encoded in a fixed
+    # 10 bits, regardless of leading zeros. The reduced 7/4-bit widths apply
+    # only to a trailing 2/1-digit remainder (handled below).
     self.data.add(
       getVal16(data[i]) * 100 + getVal16(data[i+1]) * 10 + getVal8(data[i+2]),
-      (if data[i] == '0':
-         if data[i+1] == '0': 4'u8
-         else: 7'u8
-       else: 10'u8)
+      10'u8
     )
   case (data.len mod 3)
   of 1: self.data.add getVal8(data[^1]), 4
