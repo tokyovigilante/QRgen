@@ -28,16 +28,13 @@ type
     ecLevel*: QRECLevel
     data*: string
 
-  DataSizeDefect* = object of Defect
-    ## Defect emitted by `setSmallestVersion<#setSmallestVersion%2CQRCode>`_
-    ## when `data` can't fit in any QR code version with the specified `mode`
-    ## and `ecLevel` or by `checkSize<#checkSize.t%2CQRCode>`_ when `data`
-    ## can't fit in the specified `version`, `mode` and `ecLevel`.
-
-template `[]`*[T](self: QRCapacity[T], qr: QRCode): T =
-  ## A helper template to get the value stored in `self` from the `ecLevel` and
-  ## `version` of `qr`.
-  self[qr.ecLevel][qr.version]
+  DataSizeDefect* = distinct int32
+    ## Raised when `data` can't fit in any QR code version with the specified
+    ## `mode` and `ecLevel`, or in the explicitly specified `version`.
+    ##
+    ## .. note:: Nimony port — nimony's exception model raises small
+    ##    `distinct int32` values (a `ref object of Defect` + `newException`
+    ##    is Nim-2 only). Catch it with a bare `except` in a `try` block.
 
 template getCapacities(mode: QRMode): QRCapacity[uint16] =
   ## A helper template to get `mode`'s capacities.
@@ -46,7 +43,7 @@ template getCapacities(mode: QRMode): QRCapacity[uint16] =
   of qrAlphanumericMode: alphanumericModeCapacities
   of qrByteMode: byteModeCapacities
 
-func getMostEfficientMode*(data: string): QRMode =
+proc getMostEfficientMode*(data: string): QRMode =
   result = qrNumericMode
   for c in data:
     if c notin alphaNumericValues:
@@ -59,34 +56,38 @@ proc getSmallestVersion*(
   data: string,
   mode: QRMode,
   ecLevel: QRECLevel
-): QRVersion =
-  result = 1
+): QRVersion {.raises: DataSizeDefect.} =
+  result = 1'u8
   for version in getCapacities(mode)[ecLevel]:
     if cast[uint16](data.len) <= version:
       return result
-    result.inc
-  raise newException(
-    DataSizeDefect,
-    "The data can't fit in any QR code version with the specified ecLevel"
-  )
+    result = result + 1'u8
+  # Nimony's raise mechanism treats a raised value of 0 as "no error"
+  # (ErrorCode.Success), so DataSizeDefect must carry a non-zero code.
+  raise DataSizeDefect(1)
 
 proc newQRCode*(
   data: string,
-  ecLevel: QRECLevel = qrECL,
-  mode: QRMode = data.getMostEfficientMode,
-  version: QRVersion = data.getSmallestVersion(mode, ecLevel),
-): QRCode =
+  ecLevel: QRECLevel,
+  mode: QRMode,
+  version: QRVersion
+): QRCode {.raises: DataSizeDefect.} =
   ## Creates a new `QRCode` object with the specified `data`, `ecLevel`, `mode`
   ## and `version`.
   ##
-  ## .. note:: By default `mode` will be the most efficient mode to encode
-  ##    `data`, `version` will be the smallest QR version where `data` can
-  ##    fit, and `version` will be the lowest level.
-  ##
   ## .. note:: Only the size will be checked.
   result = QRCode(mode: mode, version: version, ecLevel: ecLevel, data: data)
-  if cast[uint16](result.data.len) > getCapacities(result.mode)[result]:
-    raise newException(
-      DataSizeDefect,
-      "The data can't fit in the specified QR code version"
-    )
+  if cast[uint16](result.data.len) >
+      getCapacities(result.mode)[result.ecLevel][result.version]:
+    raise DataSizeDefect(1)
+
+proc newQRCode*(data: string, ecLevel: QRECLevel = qrECL): QRCode
+    {.raises: DataSizeDefect.} =
+  ## Creates a new `QRCode` from `data`, choosing the most efficient mode and
+  ## the smallest version that fits automatically.
+  ##
+  ## .. note:: Nimony port — mode/version are computed in-body rather than as
+  ##    parameter defaults (see the note on `newQR`).
+  let mode = data.getMostEfficientMode
+  let version = data.getSmallestVersion(mode, ecLevel)
+  newQRCode(data, ecLevel, mode, version)

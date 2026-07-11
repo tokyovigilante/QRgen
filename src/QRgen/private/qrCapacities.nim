@@ -10,12 +10,11 @@ import
   ]
 
 type
-  QRCapacity*[T: uint8 | uint16] = array[QRECLevel, array[QRVersion, T]]
+  QRCapacity*[T: uint8 | uint16] = array[QRECLevel, array[1'u8..40'u8, T]]
     ## Array made of other 4 arrays, each corresponding to a different
     ## `QRECLevel` and containing 40 values corresponding to each `QRVersion`.
 
-{.push compileTime.}
-let
+const
   numericModeCapacities*: QRCapacity[uint16] = [
     [41'u16,77,127,187,255,322,370,461,552,652,772,883,1022,1101,1250,1408,1548,1725,1903,2061,2232,2409,2620,2812,3057,3283,3517,3669,3909,4158,4417,4686,4965,5253,5529,5836,6153,6479,6743,7089],
     [34'u16,63,101,149,202,255,293,365,432,513,604,691,796,871,991,1082,1212,1346,1500,1600,1708,1872,2059,2188,2395,2544,2701,2857,3035,3289,3486,3693,3909,4134,4343,4588,4775,5039,5313,5596],
@@ -82,7 +81,7 @@ let
     ## .. note:: The amount of ECC blocks is the same as the amount of
     ##    group1 blocks plus the amount of group2 blocks.
 
-  alignmentPatternLocations*: array[QRVersion, seq[uint8]] = [
+  alignmentPatternLocations*: array[1'u8..40'u8, seq[uint8]] = [
     @[],
     @[18'u8],
     @[22'u8],
@@ -127,4 +126,3 @@ let
     ##
     ## .. note:: The location `6` is present in all of them except for
     ##    the QR code with version `1`, hence it's not stored.
-{.pop.}

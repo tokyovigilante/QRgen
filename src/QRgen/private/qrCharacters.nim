@@ -13,31 +13,26 @@ const
   specialValues*      = {' ', '$', '%', '*', '+', '-', '.', '/', ':'}
   alphaNumericValues* = specialValues + numericValues + alphaValues
 
-iterator pairs[T](a: set[T]): tuple[key: uint8, val: T] =
-  ## Iterator to get both index and value off a `set`.
-  ##
-  ## .. note:: The order in which the values are given is not by order of
-  ##    insertion.
-  var x: uint8 = 0'u8
-  for c in a:
-    yield (key: x, val: c)
-    inc x
-
-func getSpecialValue(c: char): uint8 =
+proc getSpecialValue(c: char): uint8 =
   ## Returns the value of the special character `c` according to the
-  ## alphanumeric table.
-  for i, val in specialValues:
+  ## alphanumeric table. Sets iterate in ascending char-code order, which is
+  ## exactly the order the alphanumeric table numbers the special characters
+  ## (space=36 .. ':'=44).
+  result = 0xFF'u8
+  var i = 0'u8
+  for val in specialValues:
     if val == c:
       return i + 36'u8
+    i = i + 1'u8
 
-func getAlphanumericValue*(c: char): uint8 =
+proc getAlphanumericValue*(c: char): uint8 =
   ## Returns the value of the alphanumeric character `c` according to the
   ## alphanumeric table, else returns `0xFF` (`uint8.high`).
   const
     firstNumericPos: uint8 = cast[uint8]('0')
-    firstAlphaPos: uint8 = cast[uint8]('A') - 10
+    firstAlphaPos: uint8 = cast[uint8]('A') - 10'u8
   case c
   of numericValues: cast[uint8](c) - firstNumericPos
   of alphaValues: cast[uint8](c) - firstAlphaPos
   of specialValues: getSpecialValue c
-  else: 0xFF
+  else: 0xFF'u8

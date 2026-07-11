@@ -27,29 +27,37 @@ runnableExamples:
 
 import
   QRgen/private/[
-    DrawedQRCode/DrawedQRCode,
+    DrawedQRCode/drawedQRCode,
     DrawedQRCode/print,
-    EncodedQRCode/EncodedQRCode,
-    QRCode,
+    EncodedQRCode/encodedQRCode,
+    qrCode,
     qrTypes
   ]
 
 export
-  DrawedQRCode.DrawedQRCode,
+  drawedQRCode.DrawedQRCode,
   print,
-  QRCode.DataSizeDefect,
+  qrCode.DataSizeDefect,
   qrTypes
 
 proc newQR*(
   data: string,
-  ecLevel: QRECLevel = qrECL,
-  mode: QRMode = data.getMostEfficientMode,
-  version: QRVersion = data.getSmallestVersion(mode, ecLevel),
-): DrawedQRCode =
-  ## Creates a new `DrawedQRCode` object with the specified `data`, `ecLevel`,
-  ## `mode` and `version`.
+  ecLevel: QRECLevel,
+  mode: QRMode,
+  version: QRVersion
+): DrawedQRCode {.raises: DataSizeDefect.} =
+  ## Creates a new `DrawedQRCode` with an explicit `mode` and `version`.
+  newQRCode(data, ecLevel, mode, version).encode.draw
+
+proc newQR*(data: string, ecLevel: QRECLevel = qrECL): DrawedQRCode
+    {.raises: DataSizeDefect.} =
+  ## Creates a new `DrawedQRCode` from `data`, choosing the most efficient
+  ## mode and the smallest version that fits automatically.
   ##
-  ## .. note:: By default `mode` will be the most efficient mode to encode
-  ##    `data`, `version` will be the smallest QR version where `data` can
-  ##    fit, and `version` will be the lowest level.
+  ## .. note:: Nimony port — the mode/version defaults are computed in-body
+  ##    rather than as default parameter values. Nimony's compiler currently
+  ##    crashes on a default parameter that references another parameter
+  ##    (`version = data.getSmallestVersion(mode, ecLevel)`).
+  let mode = data.getMostEfficientMode
+  let version = data.getSmallestVersion(mode, ecLevel)
   newQRCode(data, ecLevel, mode, version).encode.draw

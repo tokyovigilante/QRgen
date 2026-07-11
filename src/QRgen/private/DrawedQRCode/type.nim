@@ -1,8 +1,10 @@
 import
-  ".."/[Drawing, EncodedQRCode/EncodedQRCode, qrTypes]
+  ".."/[drawing, EncodedQRCode/encodedQRCode, qrTypes]
 
 type
-  Mask* = range[0'u8..7'u8]
+  Mask* = uint8
+    ## The applied mask pattern, 0..7. (Nimony port — a plain `uint8` rather
+    ## than `range[0'u8..7'u8]`; the range prover fights the mask arithmetic.)
 
   DrawedQRCode* = object
     ## An object holding the drawing of a `EncodedQRCode`, `drawing`, the
@@ -13,6 +15,9 @@ type
     mask*: Mask
     drawing*: Drawing
 
+func sizeForVersion(version: QRVersion): uint8 =
+  uint8((int(version) - 1) * 4 + 21)
+
 func newDrawedQRCode*(
   version: QRVersion,
   ecLevel: QRECLevel = qrECL
@@ -21,10 +26,10 @@ func newDrawedQRCode*(
   ## `ecLevel`.
   DrawedQRCode(version: version,
                ecLevel: ecLevel,
-               drawing: newDrawing((version - 1) * 4 + 21))
+               drawing: newDrawing(sizeForVersion(version)))
 
 func newDrawedQRCode*(qr: EncodedQRCode): DrawedQRCode =
   ## Creates a new `DrawedQRCode` from an exisiting `EncodedQRCode` object.
   DrawedQRCode(version: qr.version,
                ecLevel: qr.ecLevel,
-               drawing: newDrawing((qr.version - 1) * 4 + 21))
+               drawing: newDrawing(sizeForVersion(qr.version)))

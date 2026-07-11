@@ -1,6 +1,6 @@
 import
   "."/[type],
-  ".."/[BitArray, Drawing, qrCapacities]
+  ".."/[bitArray, drawing, qrCapacities]
 
 type
   DirectionKind = enum
@@ -26,25 +26,25 @@ proc drawData*(self: var DrawedQRCode, data: BitArray) =
   ##
   ## .. note:: Take a look at the
   ##    `placement algorithm<https://www.thonky.com/qr-code-tutorial/module-placement-matrix#step-6-place-the-data-bits>`_.
-  template size: uint8 = self.drawing.size
+  let size: uint8 = self.drawing.size
   var pos = Position(x: size-1,
                      y: size-1,
                      direction: dLeft,
                      orientation: oUpwards,
                      repeat: 0)
-  {.cast(gcsafe).}:
-    var
-      alignmentPatternBoundsX: set[uint8]
-      alignmentPatternUpperBoundsY: set[uint8]
-      alignmentPatternLowerBoundsY: set[uint8]
+  var
+    alignmentPatternBoundsX: set[uint8] = {}
+    alignmentPatternUpperBoundsY: set[uint8] = {}
+    alignmentPatternLowerBoundsY: set[uint8] = {}
+  block:
     if alignmentPatternLocations[self.version].len > 1:
       alignmentPatternBoundsX.incl {4'u8..8'u8}
       alignmentPatternUpperBoundsY.incl {4'u8}
       alignmentPatternLowerBoundsY.incl {8'u8}
-    for pos in alignmentPatternLocations[self.version]:
-      alignmentPatternBoundsX.incl {pos-2..pos+2}
-      alignmentPatternUpperBoundsY.incl {pos-2}
-      alignmentPatternLowerBoundsY.incl {pos+2}
+    for loc in alignmentPatternLocations[self.version]:
+      alignmentPatternBoundsX.incl {loc-2..loc+2}
+      alignmentPatternUpperBoundsY.incl {loc-2}
+      alignmentPatternLowerBoundsY.incl {loc+2}
   template changeOrientation(o: OrientationKind) =
     pos.direction = dLeft
     pos.repeat = 1
@@ -55,7 +55,7 @@ proc drawData*(self: var DrawedQRCode, data: BitArray) =
     else:
       elseBody
   for module in 0..<data.len*8:
-    if ((data[module div 8] shr (7 - (module mod 8))) and 0x01) == 0x01:
+    if ((data[module div 8] shr (7 - (module mod 8))) and 0x01'u8) == 0x01'u8:
       self.drawing.fillPoint pos.x, pos.y
     # Avoiding stuff, changing orientation in borders, etc block
     case pos.direction

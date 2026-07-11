@@ -14,7 +14,7 @@ import
     drawInformation,
     type
   ],
-  ".."/[EncodedQRCode/EncodedQRCode]
+  ".."/[EncodedQRCode/encodedQRCode]
 
 export
   type

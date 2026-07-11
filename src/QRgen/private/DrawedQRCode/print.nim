@@ -1,246 +1,54 @@
+## # Printing a DrawedQRCode
+##
+## Nimony port. The original module used `std/strformat`'s compile-time `fmt`
+## interpolation (unavailable under nimony) and a large set of `{.dirty.}`
+## templates to emit rounded/rect/embedded-image SVG variants. This port keeps
+## the two surfaces that matter for embedding QRgen — a terminal dump and a
+## plain-square-module SVG string — built with ordinary string concatenation.
+## The rounded-module / rounded-alignment / separation / embedded-image options
+## of the Nim-2 `printSvg` are intentionally not ported (they are cosmetic and
+## were out of scope). The default (square) SVG is byte-for-byte what the Nim-2
+## `printSvg` produced with default arguments.
+
 import
+  std/syncio,
   "."/[type],
-  ".."/[Drawing, qrTypes],
-  std/[strformat]
-
-when defined(js):
-  import
-    std/[jsconsole]
-
-template size: uint8 =
-  ## Helper template to get the size of the passed `DrawedQRCode`'s `drawing`.
-  self.drawing.size
+  ".."/[drawing]
 
 proc printTerminal*(self: DrawedQRCode) =
   ## Print a `DrawedQRCode` to the terminal using `stdout`.
-  var result: string = newStringOfCap((size.uint16 * 2 + 11) * size + 10)
-  result.add "\n\n\n\n\n"
-  for y in 0'u8..<size:
-    result.add "          "
-    for x in 0'u8..<size:
-      result.add(
-        if self.drawing[x, y]: "██"
-        else: "  "
-      )
-    result.add "\n"
-  result.add "\n\n\n\n\n"
-  when defined(js):
-    console.log result.cstring
-  else:
-    stdout.write result
-
-const svgHeader: string =
-  # SVG tag start
-  """<svg class="{class}" id="{id}" version="1.1"""" &
-  """ xmlns="http://www.w3.org/2000/svg"""" &
-  """ viewBox="-5 -5 {size+10} {size+10}">""" &
-  # Background of the SVG
-  """<path class="qrLight" fill="{light}"""" &
-  """ d="M-5,-5h{size+10}v{size+10}h-{size+10}Z"></path>"""
-
-const svgEnd: string =
-  """</svg>"""
-
-const moPath: string =
-  """M{x},{y}h1v1h-1Z"""
-
-const moPathStart: string =
-  """<path class="qrDark" fill="{dark}" d=""""
-
-const moPathEnd: string =
-  "\"></path>"
-
-const moRect: string =
-  """<rect""" &
-  """ x="{x.float32+moSepPx:<3}" y="{y.float32+moSepPx}"""" &
-  """ width="{1-moSepPx*2}"""" &
-  """ height="{1-moSepPx*2}"""" &
-  """ rx="{moRadPx}"""" &
-  """></rect>"""
-
-const moRectGroupStart: string =
-  """<g fill="{dark}" class="qrDark qrRounded qrModules">"""
-
-const moRectGroupEnd: string =
-  """</g>"""
-
-const alRect: string =
-  """<rect""" &
-  """ x="{x}" y="{y}" width="{s}" height="{s}"""" &
-  """ rx="{r}"></rect>"""
-
-const alRectGroupStart: string =
-  """<g class="qrRounded qrAlPatterns">"""
-
-const alRectGroupEnd: string =
-  """</g>"""
-
-const alRectDarkGroupStart: string =
-  """<g class="qrDark" fill="{dark}">"""
-
-const alRectDarkGroupEnd: string =
-  """</g>"""
-
-const alRectLightGroupStart: string =
-  """<g class="qrLight" fill="{light}">"""
-
-const alRectLightGroupEnd: string =
-  """</g>"""
-
-const svgEmbedStart: string =
-  """<image""" &
-  """ x="{svgImgCoords.x}"""" &
-  """ y="{svgImgCoords.y}"""" &
-  """ width="{svgImgCoords.w}"""" &
-  """ height="{svgImgCoords.h}"""" &
-  """ href="data:image/svg+xml,"""
-
-const svgEmbedEnd: string =
-  """"/>"""
-
-type
-  Percentage* = range[0f32..100f32]
-    ## A value between `0` and `100` (inclusive).
-
-func genDefaultCoords(self: DrawedQRCode): tuple[x,y,w,h: uint8] =
-  let size: uint8 = (self.drawing.size div (
-    case self.ecLevel
-    of qrECL: 24
-    of qrECM: 12
-    of qrECQ: 6
-    of qrECH: 3
-  ) div 2) * 2 + 1
-  let margin: uint8 = (self.drawing.size - size) div 2
-  result = (
-    x: margin,
-    y: margin,
-    w: size,
-    h: size
-  )
-
-func encodeSvgEmbed(result: var string, svgImg: string) =
-  for i in 0..<svgImg.len:
-    case svgImg[i]
-    of '<': result.add "%3c"
-    of '>': result.add "%3e"
-    of '"': result.add '\''
-    of '\'': result.add "%22"
-    of '#': result.add "%23"
-    of ',': result.add "%2c"
-    of ';': result.add "%3b"
-    of ' ':
-      if svgImg[i-1] != ' ':
-        result.add ' '
-    of '\c', '\l': discard
-    else: result.add svgImg[i]
-
-func printSvg*(
-  self: DrawedQRCode,
-  light = "#ffffff",
-  dark = "#000000",
-  alRad: Percentage = 0,
-  moRad: Percentage = 0,
-  moSep: Percentage = 0,
-  class: string = "qrCode",
-  id: string = "",
-  svgImg: string = "",
-  svgImgCoords: tuple[x, y, w, h: uint8] = self.genDefaultCoords,
-  forceUseRect: bool = false
-): string =
-  ## Print a `DrawedQRCode` in SVG format (returned as a `string`).
-  ##
-  ## .. note:: You can pass the hexadecimal color values light and dark,
-  ##    which represent the background color and the dark module's color,
-  ##    respectively. By default light is white (`#ffffff`) and dark is black
-  ##    (`#000000`).
-  ##
-  ## .. note:: You can make the alignment patterns circles by passing `alRad`,
-  ##    and the modules by passing `moRad`. These values are a `Percentage`, a
-  ##    value between `0` and `100` (inclusive) which determines the roundness,
-  ##    `0` being a square and `100` a perfect circle. By default these are set
-  ##    to `0`.
-  ##
-  ## .. note:: You can change the separation of the modules from one another
-  ##    by setting `moSep`, which is a `Percentage`, a value between `0` and
-  ##    `100` (inclusive) which determines the separation, `0` being no
-  ##    separation and `100` making the modules minuscule. By default it is
-  ##    `0`, and the recommended max value is `25`.
-  ##
-  ## .. note:: When the roundness of both alignment patterns and modules is
-  ##    `0`, both will be drawed in the same `<path>`; if only the modules
-  ##    roundness is set `0`, those will be drawed in a `<path>` and the
-  ##    alignment patterns with a `<rect>`; if both are not `0` then both will
-  ##    be drawed using `<rect>`. An special case is when `moSep` is larger
-  ##    than `0`, no matter the roundness everything will be drawed using
-  ##    `<rect>` too.
-  ##
-  ## .. note:: If you want to force drawing both alignment patterns and modules
-  ##    using `<rect>`, no matter the roundness or separation, set
-  ##    `forceUseRect` to `true`.
-  ##
-  ## .. note:: You can pass a custom id and class to set to `<svg>`, by default
-  ##    the class is `qrCode`, depending on the color a tag will have `qrLight`
-  ##    or `qrDark`, `<rect>` will have `qrRounded`, a tag drawing modules
-  ##    `qrModules`, a tag drawing alignment patterns `qrAlPatterns`.
-  ##
-  ## .. note:: `<rect>` will be grouped inside a `<g>` which will set the
-  ##    classes and fill color.
-  ##
-  ## .. note:: You can embed an SVG in the generated QR code, as a logo for
-  ##    example, by passinng a string with the SVG's content to `svgImg`.
-  ##
-  ## .. note:: By default the embedded SVG will be drawed in the center of the
-  ##    QR, and it's size will vary depending on the `ecLevel` the QR code was
-  ##    made with, the higher the `ecLevel` the bigger the embedded image will
-  ##    be. You can change this by setting `svgImgCoords`, which contains a
-  ##    tuple with the `x,y` position of `svgImg` and it's width an height.
-  result = fmt(svgHeader)
-  template drawRegion(ax, bx, ay, by: uint8, s: static string) {.dirty.} =
-    for y in ay..<by:
-      for x in ax..<bx:
-        if self.drawing[x, y]:
-          result.add fmt(s)
-  template drawQRModulesOnly(s: static string) {.dirty.} =
-    drawRegion 0'u8, size, 7'u8, size-7, s
-    drawRegion 7'u8, size-7, 0'u8, 7'u8, s
-    drawRegion 7'u8, size, size-7, size, s
-  let moSepPx: float32 = 0.4 * moSep / 100
-  if moRad > 0 or moSep > 0 or forceUseRect:
-    let moRadPx: float32 = (0.5 - moSepPx) * moRad / 100
-    result.add fmt(moRectGroupStart)
-    drawQRModulesOnly moRect
-    result.add moRectGroupEnd
-  else:
-    result.add fmt(moPathStart)
-    if alRad > 0:
-      drawQRModulesOnly moPath
-    else:
-      drawRegion 0'u8, size, 0'u8, size, moPath
-    result.add fmt(moPathEnd)
-  if alRad > 0 or moRad > 0 or moSep > 0 or forceUseRect:
-    let alRadPx: float32 = 3.5 * alRad / 100
-    template innerRadius(lvl: static range[0'i8..2'i8]): float32 =
-      when lvl == 0: alRadPx
+  var res: string = "\n\n\n\n\n"
+  for y in 0'u8 ..< self.drawing.size:
+    res.add "          "
+    for x in 0'u8 ..< self.drawing.size:
+      if self.drawing[x, y]:
+        res.add "██"
       else:
-        if alRadPx == 0: 0f
-        elif alRadPx-lvl <= 0: 1f / (lvl * 2)
-        else: alRadPx-lvl
-    func drawRoundedRect(x, y: uint8, s, r: float32): string = fmt(alRect)
-    template drawAlPatterns(lvl: range[0'i8..2'i8], c: untyped) {.dirty.} =
-      template s: float32 = 7-lvl*2
-      template r: float32 = innerRadius(lvl)
-      result.add fmt(`alRect c GroupStart`)
-      result.add drawRoundedRect(0'u8+lvl, 0'u8+lvl, s, r)
-      result.add drawRoundedRect(size-7'u8+lvl, 0'u8+lvl, s, r)
-      result.add drawRoundedRect(0'u8+lvl, size-7+lvl, s, r)
-      result.add `alRect c GroupEnd`
-    result.add alRectGroupStart
-    drawAlPatterns 0, dark
-    drawAlPatterns 1, light
-    drawAlPatterns 2, dark
-    result.add alRectGroupEnd
-  if svgImg.len > 0:
-    result.add fmt(svgEmbedStart)
-    result.encodeSvgEmbed svgImg
-    result.add svgEmbedEnd
-  result.add svgEnd
+        res.add "  "
+    res.add "\n"
+  res.add "\n\n\n\n\n"
+  stdout.write res
+
+proc printSvg*(
+  self: DrawedQRCode,
+  light: string = "#ffffff",
+  dark: string = "#000000",
+  class: string = "qrCode",
+  id: string = ""
+): string =
+  ## Print a `DrawedQRCode` in SVG format (returned as a `string`), using plain
+  ## square modules. `light` is the background colour and `dark` the module
+  ## colour.
+  let sp10: int = int(self.drawing.size) + 10
+  result =
+    "<svg class=\"" & class & "\" id=\"" & id & "\" version=\"1.1\"" &
+    " xmlns=\"http://www.w3.org/2000/svg\"" &
+    " viewBox=\"-5 -5 " & $sp10 & " " & $sp10 & "\">" &
+    "<path class=\"qrLight\" fill=\"" & light & "\"" &
+    " d=\"M-5,-5h" & $sp10 & "v" & $sp10 & "h-" & $sp10 & "Z\"></path>" &
+    "<path class=\"qrDark\" fill=\"" & dark & "\" d=\""
+  for y in 0'u8 ..< self.drawing.size:
+    for x in 0'u8 ..< self.drawing.size:
+      if self.drawing[x, y]:
+        result.add "M" & $int(x) & "," & $int(y) & "h1v1h-1Z"
+  result.add "\"></path></svg>"

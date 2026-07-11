@@ -1,5 +1,5 @@
 import
-  ".."/[BitArray, QRCode, qrCapacities, qrTypes]
+  ".."/[bitArray, qrCode, qrCapacities, qrTypes]
 
 type
   EncodedQRCode* = object
@@ -17,21 +17,15 @@ proc newEncodedQRCode*(
 ): EncodedQRCode =
   ## Creates a new `EncodedQRCode` object with the specified `mode`, `version`
   ## and `ecLevel`.
-  template get[T](self: QRCapacity[T]): T = self[ecLevel][version]
-  template dataSize: uint16 = totalDataCodewords.get
-  template eccSize: uint16 =
-    (group1Blocks.get + group2Blocks.get).uint16 * blockECCodewords.get
+  let dataSize: int = int(totalDataCodewords[ecLevel][version])
+  let eccSize: int =
+    (int(group1Blocks[ecLevel][version]) + int(group2Blocks[ecLevel][version])) *
+      int(blockECCodewords[ecLevel][version])
   EncodedQRCode(mode: mode,
                 version: version,
                 ecLevel: ecLevel,
-                data: newBitArray(dataSize + eccSize))
+                data: newBitArray(uint16(dataSize + eccSize)))
 
 proc newEncodedQRCode*(qr: QRCode): EncodedQRCode =
   ## Creates a new `EncodedQRCode` from an exisiting `QRCode` object.
-  template dataSize: uint16 = totalDataCodewords[qr]
-  template eccSize: uint16 =
-    (group1Blocks[qr] + group2Blocks[qr]).uint16 * blockECCodewords[qr]
-  EncodedQRCode(mode: qr.mode,
-                version: qr.version,
-                ecLevel: qr.ecLevel,
-                data: newBitArray(dataSize + eccSize))
+  newEncodedQRCode(qr.version, qr.ecLevel, qr.mode)

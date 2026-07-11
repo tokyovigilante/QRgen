@@ -15,7 +15,7 @@ import
     interleaveECCodewords,
     type
   ],
-  ".."/[QRCode]
+  ".."/[qrCode]
 
 export
   type

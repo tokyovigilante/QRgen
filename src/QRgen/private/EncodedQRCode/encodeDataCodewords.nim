@@ -1,14 +1,10 @@
 import
   "."/[type, utils],
-  ".."/[BitArray, qrCapacities, qrCharacters, qrTypes]
-
-template getVal8(c: char): uint8 =
-  ## Helper template to get the alphanumeric value of `c` as a uint8.
-  getAlphanumericValue c
+  ".."/[bitArray, qrCapacities, qrCharacters, qrTypes]
 
 template getVal16(c: char): uint16 =
   ## Helper template to get the alphanumeric value of `c` as a uint16.
-  (getVal8 c).uint16
+  uint16(getAlphanumericValue c)
 
 template encodeNumericModeData(self: var EncodedQRCode, data: string) =
   ## Encodes `data` via the numeric mode encoding algorithm.
@@ -17,32 +13,30 @@ template encodeNumericModeData(self: var EncodedQRCode, data: string) =
     # 10 bits, regardless of leading zeros. The reduced 7/4-bit widths apply
     # only to a trailing 2/1-digit remainder (handled below).
     self.data.add(
-      getVal16(data[i]) * 100 + getVal16(data[i+1]) * 10 + getVal8(data[i+2]),
+      getVal16(data[i]) * 100'u16 + getVal16(data[i+1]) * 10'u16 +
+        getVal16(data[i+2]),
       10'u8
     )
   case (data.len mod 3)
-  of 1: self.data.add getVal8(data[^1]), 4
-  of 2: self.data.add getVal16(data[^2]) * 10 + getVal8(data[^1]), 7
+  of 1: self.data.add getVal16(data[^1]), 4'u8
+  of 2: self.data.add getVal16(data[^2]) * 10'u16 + getVal16(data[^1]), 7'u8
   else: discard
 
 template encodeAlphanumericModeData(self: var EncodedQRCode, data: string) =
   ## Encodes `data` via the alphanumeric mode encoding algorithm.
   for i in step(0, data.len, 2):
-    self.data.add getVal16(data[i]) * 45 + getVal8(data[i+1]), 11
+    self.data.add getVal16(data[i]) * 45'u16 + getVal16(data[i+1]), 11'u8
   if (data.len mod 2) == 1:
-    self.data.add getVal8(data[^1]), 6
+    self.data.add getVal16(data[^1]), 6'u8
 
 template encodeByteModeData(self: var EncodedQRCode, data: string) =
   ## Encodes `data` via the byte mode encoding algorithm.
   for c in data:
-    self.data.add cast[uint8](c), 8
+    self.data.add uint16(cast[uint8](c)), 8'u8
 
-func encodeDataCodewords*(self: var EncodedQRCode, data: string) =
-  ## Depending on `self.mode`, the data will be encoded using 
-  ## `numeric mode<#encodeNumericModeData.t%2CEncodedQRCode%2Cstring>`_ or
-  ## `alphanumeric mode<#encodeAlphanumericModeData.t%2CEncodedQRCode%2Cstring>`_
-  ## or `byte mode<#encodeByteModeData.t%2CEncodedQRCode%2Cstring>`_ encoding
-  ## algorithms.
+proc encodeDataCodewords*(self: var EncodedQRCode, data: string) =
+  ## Depending on `self.mode`, the data will be encoded using numeric,
+  ## alphanumeric or byte mode encoding algorithms.
   case self.mode
   of qrNumericMode:      encodeNumericModeData self, data
   of qrAlphanumericMode: encodeAlphanumericModeData self, data
@@ -52,15 +46,15 @@ proc finishDataEncoding*(self: var EncodedQRCode) =
   ## Adds the terminator bits and missing bits, and if there are more bytes
   ## unfilled, fills them with `0b11101100` and `0b00010001`.
   var missingBits: uint16 =
-    (totalDataCodewords[self] * 8) - self.data.pos
+    (totalDataCodewords[self] * 8'u16) - self.data.pos
   let terminatorBits: uint8 =
-    if missingBits > 4: 4'u8
+    if missingBits > 4'u16: 4'u8
     else: cast[uint8](missingBits)
-  self.data.add 0b0000'u8, terminatorBits
-  missingBits -= terminatorBits + self.data.nextByte
-  let missingBytes: uint16 = missingBits div 8
-  for _ in 1'u16..(missingBytes div 2):
-    self.data.add 0b11101100'u8, 8
-    self.data.add 0b00010001'u8, 8
-  if (missingBytes mod 2) == 1:
-    self.data.add 0b11101100'u8, 8
+  self.data.add 0'u16, terminatorBits
+  missingBits = missingBits - uint16(terminatorBits + self.data.nextByte)
+  let missingBytes: uint16 = missingBits div 8'u16
+  for _ in 1'u16 .. (missingBytes div 2'u16):
+    self.data.add 0b11101100'u16, 8'u8
+    self.data.add 0b00010001'u16, 8'u8
+  if (missingBytes mod 2'u16) == 1'u16:
+    self.data.add 0b11101100'u16, 8'u8

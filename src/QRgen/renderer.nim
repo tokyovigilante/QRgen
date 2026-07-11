@@ -12,9 +12,9 @@
 
 import
   "."/private/[
-    DrawedQRCode/DrawedQRCode,
+    DrawedQRCode/drawedQRCode,
     DrawedQRCode/print,
-    Drawing,
+    drawing,
     qrTypes
   ],
   pkg/[pixie]
