@@ -3,11 +3,42 @@ import
   QRgen/private/[
     BitArray,
     EncodedQRCode/encodeIndicators,
+    EncodedQRCode/encodeDataCodewords,
     EncodedQRCode/interleaveDataCodewords,
     EncodedQRCode/EncodedQRCode,
     QRCode,
     qrTypes
   ]
+
+benchmarkTest "encodeNumericModeData() zero-led groups (ISO/IEC 18004 §7.4.3)":
+  # Every full 3-digit group MUST occupy a fixed 10 bits regardless of leading
+  # zeros; only a trailing 2/1-digit remainder uses 7/4 bits. Regression for a
+  # bug where zero-led groups were emitted in 7 (or 4) bits, corrupting the
+  # stream. Each check pins the exact bit position after mode indicator (4) +
+  # char count indicator (10, numeric v1) + data segment.
+  proc numericSegmentPos(data: string): uint16 =
+    var qr = newEncodedQRCode newQRCode(data)
+    qr.encodeModeIndicator
+    qr.encodeCharCountIndicator data
+    qr.encodeDataCodewords data
+    qr.data.pos
+
+  # "012" -> one full group in 10 bits (buggy code emitted 7): 4 + 10 + 10
+  check numericSegmentPos("012") == 24'u16
+  # "00012" -> "000" full group in 10 bits + "12" remainder in 7: 4 + 10 + 17
+  check numericSegmentPos("00012") == 31'u16
+  # "0123456789" -> 3 full groups (30 bits) + "9" remainder (4): 4 + 10 + 34
+  check numericSegmentPos("0123456789") == 48'u16
+
+benchmarkTest "encodeOnly() numeric with zero-led group":
+  # Full-pipeline vector for "0123456789" (numeric, v1-L). Hand-derived from
+  # ISO/IEC 18004 §7.4.3: groups 012,345,678 each in 10 bits, then "9" in 4.
+  let qr = encodeOnly newQRCode("0123456789")
+  check qr.data[0..18] == @[
+    0b00010000'u8,0b00101000,0b00001100,0b01010110,0b01101010,0b01101001,
+    0b00000000,0b11101100,0b00010001,0b11101100,0b00010001,0b11101100,
+    0b00010001,0b11101100,0b00010001,0b11101100,0b00010001,0b11101100,
+    0b00010001]
 
 benchmarkTest "encodeCharCountIndicator()":
   var text1 = "0123"
