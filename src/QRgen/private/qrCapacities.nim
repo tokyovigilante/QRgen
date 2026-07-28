@@ -81,6 +81,10 @@ const
     ## .. note:: The amount of ECC blocks is the same as the amount of
     ##    group1 blocks plus the amount of group2 blocks.
 
+# `let`, not `const`: nimony's wasm arm cannot evaluate newSeqUninit(0)
+# (the empty seq literal) at compile time; every consumer indexes at
+# runtime, so nothing needs the const-ness.
+let
   alignmentPatternLocations*: array[1'u8..40'u8, seq[uint8]] = [
     @[],
     @[18'u8],
