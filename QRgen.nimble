@@ -1,6 +1,8 @@
 # Package
 
-version       = "3.1.0"
+# Authoritative version is the git tag + commit SHA (`git describe --tags`);
+# this field exists only so the package-manager parse succeeds.
+version       = "4.0.0"
 author        = "aruZeta"
 description   = "A QR code generation library."
 license       = "MIT"
