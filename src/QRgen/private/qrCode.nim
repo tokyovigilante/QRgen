@@ -28,13 +28,14 @@ type
     ecLevel*: QRECLevel
     data*: string
 
-  DataSizeDefect* = distinct int32
+  DataSizeDefect* = ErrorCode
     ## Raised when `data` can't fit in any QR code version with the specified
     ## `mode` and `ecLevel`, or in the explicitly specified `version`.
     ##
-    ## .. note:: Nimony port — nimony's exception model raises small
-    ##    `distinct int32` values (a `ref object of Defect` + `newException`
-    ##    is Nim-2 only). Catch it with a bare `except` in a `try` block.
+    ## .. note:: Nimony port — an alias of `ErrorCode`: nimony raises
+    ##    `ErrorCode` values or `ref` objects only (#2695), and an oversized
+    ##    payload raises `ValueError`. Catch it with `except ErrorCode` (or a
+    ##    bare `except`).
 
 template getCapacities(mode: QRMode): QRCapacity[uint16] =
   ## A helper template to get `mode`'s capacities.
@@ -62,9 +63,9 @@ proc getSmallestVersion*(
     if cast[uint16](data.len) <= version:
       return result
     result = result + 1'u8
-  # Nimony's raise mechanism treats a raised value of 0 as "no error"
-  # (ErrorCode.Success), so DataSizeDefect must carry a non-zero code.
-  raise DataSizeDefect(1)
+  # Nimony raises `ErrorCode` values or `ref` objects only (nimony #2695):
+  # an oversized payload is the `ValueError` code.
+  raise ValueError
 
 proc newQRCode*(
   data: string,
@@ -79,7 +80,7 @@ proc newQRCode*(
   result = QRCode(mode: mode, version: version, ecLevel: ecLevel, data: data)
   if cast[uint16](result.data.len) >
       getCapacities(result.mode)[result.ecLevel][result.version]:
-    raise DataSizeDefect(1)
+    raise ValueError
 
 proc newQRCode*(data: string, ecLevel: QRECLevel = qrECL): QRCode
     {.raises: DataSizeDefect.} =
